@@ -120,6 +120,66 @@ header{display:flex;justify-content:space-between;align-items:flex-start;margin-
 </style>
 </head>
 <body>
+<!-- PASSWORD GATE -->
+<div id="pw-gate" style="position:fixed;inset:0;background:#0a0b0f;z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;font-family:DM Mono,monospace;">
+  <div style="text-align:center;max-width:340px;padding:32px;">
+    <div style="font-family:Syne,sans-serif;font-size:32px;font-weight:800;color:#e8eaf0;margin-bottom:8px;">My <span style="color:#00e5a0;">Finance</span></div>
+    <div style="color:#6b7280;font-size:13px;margin-bottom:32px;">Enter password to continue</div>
+    <input type="password" id="pw-input" placeholder="Password" autocomplete="current-password"
+      style="width:100%;background:#13161e;border:1px solid #252a38;border-radius:8px;padding:14px 16px;color:#e8eaf0;font-family:DM Mono,monospace;font-size:14px;outline:none;text-align:center;letter-spacing:2px;margin-bottom:12px;"
+      onkeypress="if(event.key==='Enter')pwCheck()">
+    <button onclick="pwCheck()"
+      style="width:100%;background:#00e5a0;color:#000;font-family:Syne,sans-serif;font-weight:700;font-size:13px;border:none;border-radius:8px;padding:14px;cursor:pointer;">
+      Unlock
+    </button>
+    <div id="pw-error" style="color:#ff6b6b;font-size:11px;margin-top:12px;height:14px;"></div>
+    <label style="display:flex;align-items:center;gap:8px;justify-content:center;color:#6b7280;font-size:11px;margin-top:16px;cursor:pointer;">
+      <input type="checkbox" id="pw-remember" style="cursor:pointer;"> Remember me on this device
+    </label>
+  </div>
+</div>
+
+<script>
+// Password is hashed (simple hash, not cryptographically secure but stops casual access)
+// To change password: replace the hash below. Hash is djb2 of "yourpassword"
+var PW_HASH = "fc9c9336";
+
+function djb2(str){
+  var hash = 5381;
+  for(var i=0;i<str.length;i++) hash = ((hash << 5) + hash) + str.charCodeAt(i);
+  return (hash >>> 0).toString(16);
+}
+
+function pwCheck(){
+  var input = document.getElementById("pw-input").value;
+  var remember = document.getElementById("pw-remember").checked;
+  if(djb2(input) === PW_HASH){
+    if(remember) localStorage.setItem("finAuth", "1");
+    else sessionStorage.setItem("finAuth", "1");
+    document.getElementById("pw-gate").style.display = "none";
+    document.body.style.overflow = "auto";
+  } else {
+    document.getElementById("pw-error").textContent = "Incorrect password";
+    document.getElementById("pw-input").value = "";
+    setTimeout(function(){document.getElementById("pw-error").textContent="";}, 2000);
+  }
+}
+
+// Auto-unlock if previously authenticated
+(function(){
+  if(localStorage.getItem("finAuth") === "1" || sessionStorage.getItem("finAuth") === "1"){
+    document.getElementById("pw-gate").style.display = "none";
+  } else {
+    document.body.style.overflow = "hidden";
+    setTimeout(function(){
+      var inp = document.getElementById("pw-input");
+      if(inp) inp.focus();
+    }, 100);
+  }
+})();
+</script>
+
+
 <div class="wrap">
 
 <header>
