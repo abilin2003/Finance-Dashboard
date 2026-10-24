@@ -150,12 +150,13 @@ div.txr:hover{background:none}
 .txd{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .txm{font-size:12.5px;color:var(--mu);display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:2px}
 .txa{font-weight:800;text-align:right;white-space:nowrap}
-.txa.save{color:var(--acc)}.txa.debt{color:var(--red)}
+.txa.save{color:var(--acc)}.txa.debt{color:var(--red)}.txa.out{color:var(--amb)}
 .acct{font-size:11px;font-weight:700;padding:1px 8px;border-radius:99px}
 .a-ul{background:rgba(74,222,128,.13);color:#5fe08f}
 .a-rv{background:rgba(110,160,255,.14);color:#86adff}
 .a-mz{background:rgba(255,122,140,.14);color:#ff94a3}
 .a-cc{background:rgba(244,114,182,.15);color:#f7a1cf}
+.a-t2{background:rgba(46,230,182,.13);color:var(--acc)}
 .a-x{background:var(--s3);color:var(--mu)}
 
 /* ---------- pots & ISAs ---------- */
@@ -434,7 +435,7 @@ function pwCheck(){
       <div class="field"><label for="tx-bucket">Bucket</label><select class="inp" id="tx-bucket"></select></div>
       <div class="field"><label for="tx-acct">Paid from</label><select class="inp" id="tx-acct"></select></div>
     </div>
-    <div class="hint">Moving money into or out of a pot? Use the pot's Add or Take out buttons in Savings so every balance stays in sync.</div>
+    <div class="hint">Moving money into or out of a pot? Use the pot's Add or Take out buttons in Savings. Taking money out of your Cash ISA? Choose the Cash ISA withdrawal bucket.</div>
     <div class="m-acts">
       <button class="btn danger" id="tx-del" onclick="delTx(this)">Delete</button>
       <span class="sp"></span>
@@ -541,7 +542,7 @@ function pwCheck(){
       <div class="row2">
         <div class="field"><label for="s-cash-m">Cash ISA per month (£)</label><input class="inp num" id="s-cash-m" type="number" inputmode="decimal" step="0.01"></div>
         <div class="field"><label for="s-ss-m">S&amp;S ISA per month (£)</label><input class="inp num" id="s-ss-m" type="number" inputmode="decimal" step="0.01"></div>
-        <div class="field"><label for="s-cash-bal">Cash ISA balance (£)</label><input class="inp num" id="s-cash-bal" type="number" inputmode="decimal" step="0.01"></div>
+        <div class="field"><label for="s-cash-bal">Cash ISA balance now (£)</label><input class="inp num" id="s-cash-bal" type="number" inputmode="decimal" step="0.01"></div>
         <div class="field"><label for="s-cash-tgt">Cash ISA target (£)</label><input class="inp num" id="s-cash-tgt" type="number" inputmode="decimal" step="0.01"></div>
         <div class="field"><label for="s-ss-bal">S&amp;S ISA balance (£)</label><input class="inp num" id="s-ss-bal" type="number" inputmode="decimal" step="0.01"></div>
       </div>
@@ -572,8 +573,9 @@ const K = { S:"finS4", T:"finTXS4", H:"finHist4", P:"finPots4" };
 const SPEND = ["Essentials","Groceries","Personal Upkeep","Life Fund","Fun","Credit Card","Buffer"];
 const DEBT = ["Overdraft","Credit Card Repayment"];
 const LT = ["Cash ISA (Trading 212)","S&S ISA (InvestEngine)"];
-const KNOWN = SPEND.concat(DEBT, LT);
-const ACCOUNTS = ["Ulster Bank","Revolut","Monzo","Credit Card"];
+const WD = "Cash ISA withdrawal";
+const KNOWN = SPEND.concat(DEBT, LT, [WD]);
+const ACCOUNTS = ["Ulster Bank","Revolut","Monzo","Credit Card","Trading 212"];
 const META = {
   "Essentials":{e:"🏠",c:"#9184ff"},
   "Groceries":{e:"🛒",c:"#4ade80"},
@@ -585,9 +587,10 @@ const META = {
   "Overdraft":{e:"🏦",c:"#ff7a7a"},
   "Credit Card Repayment":{e:"🔁",c:"#fb7185"},
   "Cash ISA (Trading 212)":{e:"🔒",c:"#2ee6b6"},
-  "S&S ISA (InvestEngine)":{e:"📈",c:"#9184ff"}
+  "S&S ISA (InvestEngine)":{e:"📈",c:"#9184ff"},
+  "Cash ISA withdrawal":{e:"💸",c:"#ffc94d"}
 };
-const ACCT_CLS = {"Ulster Bank":"a-ul","Revolut":"a-rv","Monzo":"a-mz","Credit Card":"a-cc"};
+const ACCT_CLS = {"Ulster Bank":"a-ul","Revolut":"a-rv","Monzo":"a-mz","Credit Card":"a-cc","Trading 212":"a-t2"};
 const SUBS = [["Voxi (phone)",10],["CLUBWISE gym",29.95],["Amazon Prime",8.99],["Apple subscriptions",26.97],["Claude.ai",18]];
 const DEF_PAYDATES = ["2026-02-23","2026-03-25","2026-04-24","2026-05-22","2026-06-24","2026-07-27","2026-08-25","2026-09-24","2026-10-26","2026-11-24","2026-12-18"];
 const DEF = {
@@ -651,6 +654,12 @@ const saveS = () => wr(K.S,S);
 const saveT = () => wr(K.T,TXS);
 const saveP = () => wr(K.P,POTTX);
 const getHist = () => loadArr(K.H);
+// Cash ISA live balance = base + this month's Cash ISA deposits - withdrawals.
+// On first load the base is set so the balance you see doesn't change.
+const isaNet = () => TXS.reduce((a,t)=> t.bucket===LT[0] ? a+num(t.amount) : t.bucket===WD ? a-num(t.amount) : a, 0);
+if(S.isaBase===undefined) S.isaBase = r2(num(S.isaBalance) - isaNet());
+const cashLive = () => r2(num(S.isaBase) + isaNet());
+function syncIsa(){ S.isaBalance = cashLive(); saveS(); }
 const saveHist = h => wr(K.H,h);
 saveS();
 
@@ -712,7 +721,7 @@ function bucketOptHTML(sel,withAll){
   if(sel && !KNOWN.includes(sel) && !legacy.includes(sel)) legacy.push(sel);
   const grp = (label,arr) => arr.length ? `<optgroup label="${esc(label)}">${arr.map(b=>`<option value="${esc(b)}"${b===sel?" selected":""}>${esc(meta(b).e+"  "+b)}</option>`).join("")}</optgroup>` : "";
   return (withAll?`<option value=""${!sel?" selected":""}>All buckets</option>`:"")
-    + grp("Spending",SPEND) + grp("Debt repayments",DEBT) + grp("Savings and investing",LT) + grp("Older buckets",legacy);
+    + grp("Spending",SPEND) + grp("Debt repayments",DEBT) + grp("Savings and investing",LT.concat([WD])) + grp("Older buckets",legacy);
 }
 function acctOptHTML(sel,withAll){
   const list = ACCOUNTS.slice();
@@ -749,11 +758,11 @@ function renderOverview(P,T){
   $("cyc-start").textContent = "Paid "+fd(P.start);
   $("cyc-end").textContent = "Next pay "+fd(P.next);
 
-  const isa = sumKeys(T,LT), potIn = potFlow(P,"in"), potTot = S.pots.reduce((a,p)=>a+potBal(p),0), debt = sumKeys(T,DEBT);
+  const isaOut = num(T[WD]), isa = sumKeys(T,LT) - isaOut, potIn = potFlow(P,"in"), potTot = S.pots.reduce((a,p)=>a+potBal(p),0), debt = sumKeys(T,DEBT);
   const stat = (c,l,v,s) => `<div class="stat" style="--c:${c}"><div class="lbl">${l}</div><div class="v num">${v}</div><div class="s">${s}</div></div>`;
   $("stats").innerHTML =
     stat("var(--red)","Spent",f(spent), budget>0 ? `${Math.round(spent/budget*100)}% of ${f(budget,0)} budget` : "No budget set")
-   +stat("var(--acc)","Saved this month",f(isa+potIn),`ISAs ${f(isa,0)}, pots ${f(potIn,0)}`)
+   +stat("var(--acc)","Saved this month",f(isa+potIn),`ISAs ${f(isa,0)}, pots ${f(potIn,0)}${isaOut>0?`, after ${f(isaOut,0)} taken out`:""}`)
    +stat("var(--amb)","In your pots",f(potTot),plural(S.pots.length,"pot"))
    +stat("var(--pur)","Debt repaid",f(debt),`Overdraft ${f(T["Overdraft"]||0,0)}, card ${f(T["Credit Card Repayment"]||0,0)}`);
 
@@ -823,7 +832,7 @@ function renderChart(P,budget){
 const byDateDesc = (a,b) => (dmy2d(b.t.date)-dmy2d(a.t.date)) || (b.i-a.i);
 function txRow(x,showDate){
   const t = x.t, m = meta(t.bucket), d = dmy2d(t.date);
-  const kind = LT.includes(t.bucket) ? "save" : DEBT.includes(t.bucket) ? "debt" : "";
+  const kind = LT.includes(t.bucket) ? "save" : DEBT.includes(t.bucket) ? "debt" : t.bucket===WD ? "out" : "";
   return `<button class="txr" onclick="openTx(${x.i})"><span class="txi" style="background:${m.c}22">${m.e}</span>
     <span style="min-width:0"><span class="txd">${esc(t.desc||"—")}</span><span class="txm"><span>${esc(t.bucket||"No bucket")}</span>${t.bank?`<span class="acct ${ACCT_CLS[t.bank]||"a-x"}">${esc(t.bank)}</span>`:""}${showDate?`<span>${fd(d)}</span>`:""}</span></span>
     <span class="txa num ${kind}">${f(t.amount)}</span></button>`;
@@ -853,14 +862,15 @@ function clearF(){ $("f-q").value=""; $("f-b").value=""; $("f-a").value=""; $("f
 
 /* ================= ADD / EDIT TRANSACTION ================= */
 let EDIT = -1;
-function openTx(i){
+function openTx(i,preset){
   EDIT = (typeof i==="number" && TXS[i]) ? i : -1;
   const t = EDIT>=0 ? TXS[EDIT] : null;
   $("tx-title").textContent = t ? "Edit transaction" : "Add transaction";
   $("tx-amt").value = t ? num(t.amount) : "";
   $("tx-desc").value = t ? (t.desc||"") : "";
-  $("tx-bucket").innerHTML = bucketOptHTML(t ? t.bucket : "Essentials",false);
-  $("tx-acct").innerHTML = acctOptHTML(t ? t.bank : "Ulster Bank",false);
+  $("tx-bucket").innerHTML = bucketOptHTML(t ? t.bucket : (preset||"Essentials"),false);
+  $("tx-acct").innerHTML = acctOptHTML(t ? t.bank : (preset===WD ? "Trading 212" : "Ulster Bank"),false);
+  if(!t && preset===WD) $("tx-desc").value = "Cash ISA withdrawal";
   const d = t ? dmy2d(t.date) : today();
   $("tx-date").value = d2iso(isNaN(d) ? today() : d);
   const del = $("tx-del"); resetArm(del); del.style.display = t ? "" : "none";
@@ -875,13 +885,13 @@ function saveTx(){
   const rec = { date:d2dmy(iso2d(dv)), desc, bucket:$("tx-bucket").value, amount:r2(amt), bank:$("tx-acct").value };
   const editing = EDIT>=0 && TXS[EDIT];
   if(editing) Object.assign(TXS[EDIT],rec); else TXS.push(rec);
-  saveT(); closeM("m-tx"); renderAll();
-  toast(editing ? "Transaction updated" : `Added ${f(rec.amount)} to ${rec.bucket}`);
+  saveT(); syncIsa(); closeM("m-tx"); renderAll();
+  toast(rec.bucket===WD ? `Took ${f(rec.amount)} out of your Cash ISA. Balance is now ${f(cashLive())}` : editing ? "Transaction updated" : `Added ${f(rec.amount)} to ${rec.bucket}`);
 }
 function delTx(btn){
   if(EDIT<0 || !TXS[EDIT]) return;
   if(!armed(btn,"Tap again to delete")) return;
-  TXS.splice(EDIT,1); EDIT=-1; saveT(); closeM("m-tx"); renderAll(); toast("Transaction deleted");
+  TXS.splice(EDIT,1); EDIT=-1; saveT(); syncIsa(); closeM("m-tx"); renderAll(); toast("Transaction deleted");
 }
 
 /* ================= BUCKET BREAKDOWN ================= */
@@ -918,8 +928,8 @@ function renderSavings(P,T){
   }).join("") + `<button class="pot new" onclick="openPot()"><span style="font-size:30px;line-height:1">+</span><span>New pot</span></button>`;
   renderPlog();
 
-  const cashM = num(S.lt[LT[0]]), ssM = num(S.lt[LT[1]]), bal = num(S.isaBalance), tgt = num(S.isaTarget), ss = num(S.nwInv);
-  const cashThis = num(T[LT[0]]), ssThis = num(T[LT[1]]), pc = tgt>0 ? Math.min(100,bal/tgt*100) : 0, t0 = today();
+  const cashM = num(S.lt[LT[0]]), ssM = num(S.lt[LT[1]]), bal = cashLive(), tgt = num(S.isaTarget), ss = num(S.nwInv);
+  const cashThis = num(T[LT[0]]), cashOut = num(T[WD]), ssThis = num(T[LT[1]]), pc = tgt>0 ? Math.min(100,bal/tgt*100) : 0, t0 = today();
   let eta;
   if(tgt>0 && bal>=tgt) eta = "Target reached 🎯";
   else if(cashM>0 && tgt>0){ const n = Math.ceil((tgt-bal)/cashM); eta = `On track for ${fd(mkDate(t0.getFullYear(),t0.getMonth()+n,1),{month:"long",year:"numeric"})} at ${f(cashM,0)} a month`; }
@@ -928,7 +938,9 @@ function renderSavings(P,T){
    `<div class="card"><div class="lbl">🔒 Cash ISA, Trading 212</div><div class="isa-big num">${f(bal)}</div>
       ${tgt>0?`<div class="bar"><i style="width:${pc.toFixed(1)}%;background:linear-gradient(90deg,var(--pur),var(--acc))"></i></div><div class="muted small" style="margin:8px 0 12px">${Math.round(pc)}% of ${f(tgt,0)} target. ${esc(eta)}</div>`:""}
       <div class="kv"><span class="muted">Paid in this month</span><b class="num ${cashThis>0?"good-t":""}">${f(cashThis)}</b></div>
-      <div class="kv"><span class="muted">Monthly plan</span><b class="num">${f(cashM)}</b></div></div>
+      <div class="kv"><span class="muted">Taken out this month</span><b class="num ${cashOut>0?"warn-t":""}">${cashOut>0?"−":""}${f(cashOut)}</b></div>
+      <div class="kv"><span class="muted">Monthly plan</span><b class="num">${f(cashM)}</b></div>
+      <button class="btn ghost amber sm" style="margin-top:12px;width:100%" onclick="openTx(undefined,WD)">Take money out</button></div>
     <div class="card"><div class="lbl">📈 S&amp;S ISA, InvestEngine</div><div class="isa-big num">${f(ss)}</div>
       <div class="kv"><span class="muted">Paid in this month</span><b class="num ${ssThis>0?"good-t":""}">${f(ssThis)}</b></div>
       <div class="kv"><span class="muted">Monthly plan</span><b class="num">${f(ssM)}</b></div>
@@ -1031,10 +1043,10 @@ function renderHistory(){
   if(!h.length){ $("hist").innerHTML = `<div class="card empty">No closed months yet. On payday, tap Close month to archive the month here and start fresh.</div>`; return; }
   $("hist").innerHTML = h.map((m,i)=>{
     const tx = Array.isArray(m.transactions) ? m.transactions : [], T = sumBy(tx);
-    const spend = num(m.spend, sumKeys(T,SPEND)), lt = num(m.ltSaved, sumKeys(T,LT));
+    const spend = num(m.spend, sumKeys(T,SPEND)), lt = num(m.ltSaved, sumKeys(T,LT)-num(T[WD]));
     const rate = num(m.income)>0 ? Math.round(lt/num(m.income)*100) : 0;
-    const segTot = Math.max(0.01, Object.keys(T).filter(b=>!LT.includes(b)&&!DEBT.includes(b)).reduce((a,b)=>a+num(T[b]),0));
-    const spendBs = Object.keys(T).filter(b=>!LT.includes(b)&&!DEBT.includes(b)&&T[b]>0).sort((a,b)=>T[b]-T[a]);
+    const segTot = Math.max(0.01, Object.keys(T).filter(b=>!LT.includes(b)&&!DEBT.includes(b)&&b!==WD).reduce((a,b)=>a+num(T[b]),0));
+    const spendBs = Object.keys(T).filter(b=>!LT.includes(b)&&!DEBT.includes(b)&&b!==WD&&T[b]>0).sort((a,b)=>T[b]-T[a]);
     const segs = spendBs.map(b=>`<i style="width:${(T[b]/segTot*100).toFixed(2)}%;background:${meta(b).c}" title="${esc(b)}: ${f(T[b])}"></i>`).join("");
     const chips = spendBs.slice(0,6).map(b=>`<span style="--c:${meta(b).c}">${esc(b)} ${f(T[b],0)}</span>`).join("");
     const detail = HOPEN===i ? `<div class="hdetail">${tx.map((t,j)=>({t,i:j})).sort(byDateDesc).map(x=>txRow(x,true).replace(/^<button class="txr" onclick="[^"]*"/,'<div class="txr"').replace(/<\/button>$/,"</div>")).join("") || `<div class="empty">No transactions saved.</div>`}</div>` : "";
@@ -1078,11 +1090,11 @@ function confirmClose(){
   const T = sumBy(TXS), R = {start:ds,end:de};
   const label = `${fd(de,{month:"long",year:"numeric"})} (${fd(ds)} to ${fd(de)})`;
   const rec = { id:Date.now(), label, start:s, end:e, archivedAt:today().toLocaleDateString("en-GB"),
-    transactions:JSON.parse(JSON.stringify(TXS)), spend:r2(sumKeys(T,SPEND)), ltSaved:r2(sumKeys(T,LT)),
+    transactions:JSON.parse(JSON.stringify(TXS)), spend:r2(sumKeys(T,SPEND)), ltSaved:r2(sumKeys(T,LT)-num(T[WD])), isaOut:r2(num(T[WD])),
     stSaved:r2(potFlow(R,"in")), debt:r2(sumKeys(T,DEBT)), budget:r2(sumKeys(S.budgets,SPEND)), income:num(S.income) };
   h.unshift(rec);
   if(!saveHist(h)) return;
-  TXS = []; saveT(); closeM("m-close"); renderAll(); toast(`${label} archived to History`);
+  S.isaBase = cashLive(); TXS = []; saveT(); syncIsa(); closeM("m-close"); renderAll(); toast(`${label} archived to History`);
 }
 
 /* ================= SETTINGS ================= */
@@ -1092,7 +1104,7 @@ function openSettings(){
   $("s-budgets").innerHTML = SPEND.map((b,i)=>`<div class="field"><label for="sb-${i}">${esc(meta(b).e+"  "+b)}</label><input class="inp num" id="sb-${i}" type="number" inputmode="decimal" step="0.01" value="${num(S.budgets[b])}" oninput="budgetTotal()"></div>`).join("");
   budgetTotal();
   $("s-cash-m").value = num(S.lt[LT[0]]); $("s-ss-m").value = num(S.lt[LT[1]]);
-  $("s-cash-bal").value = num(S.isaBalance); $("s-cash-tgt").value = num(S.isaTarget); $("s-ss-bal").value = num(S.nwInv);
+  $("s-cash-bal").value = cashLive(); $("s-cash-tgt").value = num(S.isaTarget); $("s-ss-bal").value = num(S.nwInv);
   $("s-pay").value = S.paydates.map(s=>d2dmy(iso2d(s))).join("\n");
   PENDING_IMPORT = null; $("imp-file").value = ""; const c = $("imp-confirm"); resetArm(c); c.style.display = "none";
   openM("m-settings");
@@ -1122,7 +1134,7 @@ function saveSettings(){
   S.income = num($("s-income").value,S.income);
   SPEND.forEach((b,i)=>{ S.budgets[b] = num($("sb-"+i).value,0); });
   S.lt[LT[0]] = num($("s-cash-m").value,0); S.lt[LT[1]] = num($("s-ss-m").value,0);
-  S.isaBalance = num($("s-cash-bal").value,0); S.isaTarget = num($("s-cash-tgt").value,0); S.nwInv = num($("s-ss-bal").value,0);
+  S.isaBase = r2(num($("s-cash-bal").value,0) - isaNet()); S.isaBalance = cashLive(); S.isaTarget = num($("s-cash-tgt").value,0); S.nwInv = num($("s-ss-bal").value,0);
   S.paydates = pay.dates;
   if(!saveS()) return;
   closeM("m-settings"); renderAll(); toast("Settings saved");
@@ -1161,7 +1173,7 @@ function renderAll(){
   const P = period(), T = sumBy(TXS);
   renderHeader(P); renderOverview(P,T); renderTxs(); renderSavings(P,T); renderHistory();
 }
-$("tx-bucket").addEventListener("change",()=>{ if($("tx-bucket").value==="Credit Card") $("tx-acct").value = "Credit Card"; });
+$("tx-bucket").addEventListener("change",()=>{ const b=$("tx-bucket").value; if(b==="Credit Card") $("tx-acct").value = "Credit Card"; if(b===WD) $("tx-acct").value = "Trading 212"; });
 ["tx-amt","tx-desc"].forEach(id=>$(id).addEventListener("keydown",e=>{ if(e.key==="Enter") saveTx(); }));
 ["mv-amt","mv-note"].forEach(id=>$(id).addEventListener("keydown",e=>{ if(e.key==="Enter") saveMove(); }));
 renderAll();
